@@ -1,0 +1,122 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+enum AuctionStatus {
+  SCHEDULED
+  ACTIVE
+  CLOSED
+  FORCE_CLOSED
+}
+
+enum ExtensionTrigger {
+  BID_RECEIVED
+  ANY_RANK_CHANGE
+  L1_RANK_CHANGE
+}
+
+enum AuctionEventType {
+  BID_SUBMITTED
+  AUCTION_EXTENDED
+  AUCTION_CLOSED
+  AUCTION_FORCE_CLOSED
+}
+
+model Auction {
+  id                   String            @id @default(cuid())
+  referenceId          String            @unique
+  name                 String
+  origin               String?
+  destination          String?
+  pickupServiceAt      DateTime
+
+  startAt              DateTime
+  initialCloseAt       DateTime
+  currentCloseAt       DateTime
+  forcedCloseAt        DateTime
+
+  triggerWindowMinutes Int
+  extensionMinutes     Int
+  extensionTriggers    ExtensionTrigger[] @default([])
+  status               AuctionStatus      @default(SCHEDULED)
+
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  bids                 Bid[]
+  events               AuctionEvent[]
+
+  @@index([status, currentCloseAt])
+  @@index([startAt])
+}
+
+model Supplier {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bids      Bid[]
+}
+
+model Bid {
+  id                String   @id @default(cuid())
+  auctionId         String
+  supplierId        String
+
+  freightCharge     Decimal  @db.Decimal(12, 2)
+  originCharge      Decimal  @db.Decimal(12, 2)
+  destinationCharge Decimal  @db.Decimal(12, 2)
+  totalAmount       Decimal  @db.Decimal(12, 2)
+
+  transitTimeHours  Int
+  validUntil        DateTime
+  submittedAt       DateTime @default(now())
+
+  auction           Auction  @relation(fields: [auctionId], references: [id], onDelete: Restrict)
+  supplier          Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  events            AuctionEvent[]
+
+  @@index([auctionId, totalAmount])
+  @@index([auctionId, supplierId, submittedAt])
+  @@index([supplierId])
+}
+
+model AuctionEvent {
+  id                 String           @id @default(cuid())
+  auctionId          String
+  bidId              String?
+  type               AuctionEventType
+  reason             String?
+  previousCloseAt    DateTime?
+  newCloseAt         DateTime?
+  createdAt          DateTime         @default(now())
+
+  auction             Auction          @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  bid                 Bid?             @relation(fields: [bidId], references: [id], onDelete: SetNull)
+
+  @@index([auctionId, createdAt])
+  @@index([bidId])
+}
+
+model AdminSession {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}
