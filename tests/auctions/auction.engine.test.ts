@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateRankings,
   decideExtension,
+  deriveEffectiveAuctionStatus,
   type BidSnapshot,
   type ExtensionDecisionInput,
 } from "@/modules/auction.engine";
@@ -143,5 +144,62 @@ describe("decideExtension", () => {
     expect(result.newCloseAt.toISOString()).toBe(
       "2026-10-29T11:05:00.000Z",
     );
+  });
+});
+
+describe("deriveEffectiveAuctionStatus", () => {
+  const auctionBase = {
+    status: "ACTIVE",
+    startAt: new Date("2026-10-29T10:00:00.000Z"),
+    currentCloseAt: new Date("2026-10-29T11:00:00.000Z"),
+    forcedCloseAt: new Date("2026-10-29T12:00:00.000Z"),
+  };
+
+  it("returns SCHEDULED before start time", () => {
+    const status = deriveEffectiveAuctionStatus(
+      auctionBase,
+      new Date("2026-10-29T09:59:59.000Z"),
+    );
+    expect(status).toBe("SCHEDULED");
+  });
+
+  it("returns ACTIVE when within active window", () => {
+    const status = deriveEffectiveAuctionStatus(
+      auctionBase,
+      new Date("2026-10-29T10:30:00.000Z"),
+    );
+    expect(status).toBe("ACTIVE");
+  });
+
+  it("returns CLOSED when current deadline has passed", () => {
+    const status = deriveEffectiveAuctionStatus(
+      auctionBase,
+      new Date("2026-10-29T11:00:01.000Z"),
+    );
+    expect(status).toBe("CLOSED");
+  });
+
+  it("returns FORCE_CLOSED when forced close cap is reached or passed", () => {
+    const status = deriveEffectiveAuctionStatus(
+      auctionBase,
+      new Date("2026-10-29T12:00:00.000Z"),
+    );
+    expect(status).toBe("FORCE_CLOSED");
+  });
+
+  it("preserves explicit database terminal state CLOSED", () => {
+    const status = deriveEffectiveAuctionStatus(
+      { ...auctionBase, status: "CLOSED" },
+      new Date("2026-10-29T10:30:00.000Z"),
+    );
+    expect(status).toBe("CLOSED");
+  });
+
+  it("preserves explicit database terminal state FORCE_CLOSED", () => {
+    const status = deriveEffectiveAuctionStatus(
+      { ...auctionBase, status: "FORCE_CLOSED" },
+      new Date("2026-10-29T10:30:00.000Z"),
+    );
+    expect(status).toBe("FORCE_CLOSED");
   });
 });

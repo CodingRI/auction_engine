@@ -4,6 +4,55 @@ export type ExtensionTrigger =
   | "ANY_RANK_CHANGE"
   | "L1_RANK_CHANGE";
 
+export type AuctionStatus =
+  | "SCHEDULED"
+  | "ACTIVE"
+  | "CLOSED"
+  | "FORCE_CLOSED";
+
+export interface AuctionStatusInput {
+  status: AuctionStatus | string;
+  startAt: Date | string;
+  currentCloseAt: Date | string;
+  forcedCloseAt: Date | string;
+}
+
+/**
+ * Derives the operational status of an auction given current time and deadlines.
+ * Respects explicit database terminations (CLOSED, FORCE_CLOSED) while ensuring
+ * auctions whose deadlines have passed never appear actively open.
+ */
+export function deriveEffectiveAuctionStatus(
+  auction: AuctionStatusInput,
+  now: Date = new Date(),
+): AuctionStatus {
+  if (auction.status === "FORCE_CLOSED") {
+    return "FORCE_CLOSED";
+  }
+  if (auction.status === "CLOSED") {
+    return "CLOSED";
+  }
+
+  const nowMs = now.getTime();
+  const startMs = new Date(auction.startAt).getTime();
+  const currentCloseMs = new Date(auction.currentCloseAt).getTime();
+  const forcedCloseMs = new Date(auction.forcedCloseAt).getTime();
+
+  if (nowMs >= forcedCloseMs) {
+    return "FORCE_CLOSED";
+  }
+
+  if (nowMs >= currentCloseMs) {
+    return "CLOSED";
+  }
+
+  if (nowMs < startMs) {
+    return "SCHEDULED";
+  }
+
+  return "ACTIVE";
+}
+
 export interface BidSnapshot {
   supplierId: string;
   totalCents: number;
