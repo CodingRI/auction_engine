@@ -3,12 +3,11 @@ import { isAdminAuthenticated } from "@/lib/admin-auth";
 
 
 
-export async function GET() {
+export async function GET(_request: Request) {
   try {
     const authenticated = await isAdminAuthenticated();
     return NextResponse.json({ authenticated });
-  } catch (error) {
-    console.error("Failed to verify admin authentication session:", error);
+  } catch {
     return NextResponse.json({ authenticated: false });
   }
 }
