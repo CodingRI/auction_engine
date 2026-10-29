@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/app/generated/prisma/client";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
-import { createAuctionSchema } from "@/modules/auction.schema"
+import { createAuctionSchema } from "@/modules/auction.schema";
+import { deriveEffectiveAuctionStatus } from "@/modules/auction.engine";
+
+
 
 
 export async function GET() {
@@ -21,17 +24,20 @@ export async function GET() {
       },
     });
 
+    const now = new Date();
+
     const data = auctions.map((auction) => ({
       id: auction.id,
       referenceId: auction.referenceId,
       name: auction.name,
       origin: auction.origin,
       destination: auction.destination,
+      pickupServiceAt: auction.pickupServiceAt,
       startAt: auction.startAt,
       initialCloseAt: auction.initialCloseAt,
       currentCloseAt: auction.currentCloseAt,
       forcedCloseAt: auction.forcedCloseAt,
-      status: auction.status,
+      status: deriveEffectiveAuctionStatus(auction, now),
       lowestBid: auction.bids[0]?.totalAmount.toString() ?? null,
     }));
 

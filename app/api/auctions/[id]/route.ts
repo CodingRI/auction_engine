@@ -1,7 +1,9 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { calculateRankings } from "@/modules/auction.engine";
+import { calculateRankings, deriveEffectiveAuctionStatus } from "@/modules/auction.engine";
+
+
 
 
 
@@ -72,7 +74,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
         triggerWindowMinutes: auction.triggerWindowMinutes,
         extensionMinutes: auction.extensionMinutes,
         extensionTriggers: auction.extensionTriggers,
-        status: auction.status,
+        status: deriveEffectiveAuctionStatus(auction, new Date()),
         bids: auction.bids.map((bid) => ({
           id: bid.id,
           supplier: bid.supplier,
