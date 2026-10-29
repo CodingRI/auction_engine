@@ -29,8 +29,10 @@ export async function verifyAdminCredentials(
 ): Promise<boolean> {
   const configuredEmail = process.env.ADMIN_EMAIL;
   const configuredHash = process.env.ADMIN_PASSWORD_HASH;
+  const configuredPlainPassword =
+    process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSOWORD;
 
-  if (!configuredEmail || !configuredHash) {
+  if (!configuredEmail || (!configuredHash && !configuredPlainPassword)) {
     throw new Error("Admin credentials are not configured");
   }
 
@@ -39,12 +41,43 @@ export async function verifyAdminCredentials(
     configuredEmail.trim().toLowerCase(),
   );
 
-  const passwordMatches = await argon2.verify(
-    configuredHash,
-    password,
-  );
+  if (!emailMatches) {
+    return false;
+  }
 
-  return emailMatches && passwordMatches;
+  // If plaintext password is configured in env
+  if (configuredPlainPassword && safeEqual(password, configuredPlainPassword)) {
+    return true;
+  }
+
+  if (!configuredHash) {
+    return false;
+  }
+
+  const cleanHash = configuredHash.trim();
+
+  // 1. Argon2 hash format ($argon2id$, $argon2i$, etc.)
+  if (cleanHash.startsWith("$")) {
+    try {
+      return await argon2.verify(cleanHash, password);
+    } catch (err) {
+      console.error("Argon2 verification failed:", err);
+      return false;
+    }
+  }
+
+  // 2. SHA-256 hexadecimal hash (64 hex characters)
+  if (/^[a-f0-9]{64}$/i.test(cleanHash)) {
+    const inputHash = createHash("sha256").update(password).digest("hex");
+    return safeEqual(inputHash.toLowerCase(), cleanHash.toLowerCase());
+  }
+
+  // 3. Fallback: try argon2 first, then safe plaintext comparison
+  try {
+    return await argon2.verify(cleanHash, password);
+  } catch {
+    return safeEqual(password, cleanHash);
+  }
 }
 
 export async function createAdminSession(): Promise<string> {
